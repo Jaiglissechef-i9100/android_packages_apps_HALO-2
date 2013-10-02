@@ -3,13 +3,10 @@ package com.paranoid.halo;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.graphics.Bitmap;
@@ -19,17 +16,17 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class Utils {
 
-    public static final String MAIN = "main";
+    private static final String ITEMS = "items";
 
     public static int getStringHash(String str){
         int sum = 0;
@@ -49,37 +46,19 @@ public class Utils {
         return false;
     }
 
-    public static String[] getActivities(String packageName, Context context) {
-        ArrayList<String> activities = new ArrayList<String>();
-        activities.clear();
-        PackageManager pm = context.getPackageManager();
-        try {
-            PackageInfo info = pm.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES);
-
-            for (ActivityInfo a : info.activities) {
-                activities.add(a.name);
-            }
-        } catch (NameNotFoundException e) {
-            // Package does not exist
-        }
-        return activities.toArray(new String[activities.size()]);
-    }
-
-    public static Bitmap getCustomApplicationIcon(String componentName, Context context) {
+    public static Bitmap getCustomApplicationIcon(String packageName, Context context) {
         Bitmap result = null;
         SharedPreferences prefs = context.getSharedPreferences("custom_icons", 0);
-        String path = prefs.getString(componentName, null);
+        String path = prefs.getString(packageName, null);
         result = BitmapFactory.decodeFile(path);
         return result;
     }
-
-    public static Bitmap getApplicationIcon(String componentName, Context context){
-        Bitmap appIcon = getCustomApplicationIcon(componentName, context);
+    
+    public static Bitmap getApplicationIcon(String packageName, Context context){
+        Bitmap appIcon = getCustomApplicationIcon(packageName, context);
         if(appIcon == null) {
             try {
-                boolean isPackage = packageExists(context, componentName);
-                Drawable icon = context.getPackageManager().getApplicationIcon(isPackage
-                        ? componentName : getPackageName(componentName, context));
+                Drawable icon = context.getPackageManager().getApplicationIcon(packageName);
                 Bitmap tmp = ((BitmapDrawable)icon).getBitmap();
                 int iconSize = context.getResources()
                         .getDimensionPixelSize(android.R.dimen.notification_large_icon_width);
@@ -99,14 +78,12 @@ public class Utils {
         return appIcon;
     }
     
-    public static Drawable getApplicationIconDrawable(String componentName, Context context){
-        Bitmap icon = getCustomApplicationIcon(componentName, context);
+    public static Drawable getApplicationIconDrawable(String packageName, Context context){
+        Bitmap icon = getCustomApplicationIcon(packageName, context);
         Drawable appIcon = new BitmapDrawable(context.getResources(), icon);
         if(icon == null) {
             try {
-                boolean isPackage = packageExists(context, componentName);
-                appIcon = context.getPackageManager().getApplicationIcon(isPackage
-                        ? componentName : getPackageName(componentName, context));
+                appIcon = context.getPackageManager().getApplicationIcon(packageName);
             } catch (NameNotFoundException e) {
                 // Ups!
             }
@@ -158,66 +135,45 @@ public class Utils {
         return prefs.getBoolean("status", false);
     }
 
-    public static boolean savePackageName(String packageName, Context context) {
+    public static boolean saveArray(String[] array, Context context) {
         SharedPreferences prefs = context.getSharedPreferences("loaded_apps", 0);
         SharedPreferences.Editor editor = prefs.edit();
-        editor.putString(packageName, MAIN);
+        editor.clear();
+        editor.putInt(ITEMS +"_size", array.length);
+        for(int i = 0; i<array.length; i++) {
+            editor.putString(ITEMS + "_" + i, array[i]);
+        }
         return editor.commit();
-    }
-
-    public static boolean saveActivity(String packageName, String activity, Context context) {
-        SharedPreferences prefs = context.getSharedPreferences("loaded_apps", 0);
-        SharedPreferences.Editor editor = prefs.edit();
-        editor.putString(activity, packageName);
-        return editor.commit();
-    }
-
-    public static String getPackageName(String key, Context context) {
-        SharedPreferences prefs = context.getSharedPreferences("loaded_apps", 0);
-        return prefs.getString(key, null);
     }
     
-    public static Map<String, ?> loadPackageNames(Context context) {
+    public static String[] loadArray(Context context) {
         SharedPreferences prefs = context.getSharedPreferences("loaded_apps", 0);
-        return prefs.getAll();
-    }
-
-    public static boolean removeApplicationOrActivity(String input, Context context) {
-        SharedPreferences prefs = context.getSharedPreferences("loaded_apps", 0);
-        SharedPreferences.Editor editor = prefs.edit();
-        editor.remove(input);
-        return editor.commit();
+        int size = prefs.getInt(ITEMS + "_size", 0);
+        ArrayList<String> packages = new ArrayList<String>();
+        if(size != 0) {
+            for(int i = 0; i<size; i++){
+                String packageName = prefs.getString(ITEMS + "_" + i, null);
+                if(packageExists(context, packageName)) {
+                    packages.add(packageName);
+                }
+            }
+        }
+        String[] array = packages.toArray(new String[packages.size()]);
+        return array;
     }
 
     public static void createNotification(Context context, NotificationManager notificationManager,
-                                          Map.Entry<String,?> entry){
+                                          String packageName){
         try {
-            String key = entry.getKey();
-            String value = entry.getValue().toString();
-            boolean isPackage = value.equals(MAIN);
-
-            // If entry is an activity, we swap the package position
-            // to allow multiple activities attached
-            String packageName = isPackage ? key : value;
-            String appName = getApplicationName(packageName, context);
+            String appName = Utils.getApplicationName(packageName, context);
             Notification.Builder mBuilder =
                     new Notification.Builder(context)
                             .setSmallIcon(R.drawable.ic_status)
                             .setAutoCancel(false)
-                            .setLargeIcon(getApplicationIcon(key, context))
+                            .setLargeIcon(Utils.getApplicationIcon(packageName, context))
                             .setContentTitle(appName)
                             .setContentText(context.getString(R.string.tap_to_launch));
-            Intent intent;
-            if(isPackage) {
-                intent = context.getPackageManager().getLaunchIntentForPackage(packageName);
-            } else {
-                intent = new Intent(Intent.ACTION_MAIN);
-                ComponentName activity = new ComponentName(packageName, key);
-                String shortString = activity.getShortClassName();
-                appName += " " + shortString.substring(shortString.lastIndexOf(".")
-                        + 1, shortString.length());
-                intent.setComponent(activity);
-            }
+            Intent intent = context.getPackageManager().getLaunchIntentForPackage(packageName);
             PendingIntent contentIntent = PendingIntent.getActivity(context, 0,
                     intent, 0);
             mBuilder.setContentIntent(contentIntent);
@@ -225,7 +181,7 @@ public class Utils {
             notif.flags |= Notification.FLAG_ONGOING_EVENT;
             notif.priority = Notification.PRIORITY_MIN;
             notif.tickerText = appName;
-            notificationManager.notify(Utils.getStringHash(key), notif);
+            notificationManager.notify(Utils.getStringHash(packageName), notif);
         } catch(NullPointerException npe) {
             // Skip this application
         }

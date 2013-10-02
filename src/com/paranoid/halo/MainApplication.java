@@ -8,22 +8,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
-import java.util.Map;
+import android.support.v4.app.NotificationCompat;
 
 public class MainApplication extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+
         if (Utils.getStatus(this)) {
-            Map<String, ?> packages = Utils.loadPackageNames(this);
+            String[] packages = Utils.loadArray(this);
             if(packages != null) {
                 NotificationManager notificationManager =
-                        (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                for(Map.Entry<String,?> entry : packages.entrySet()){
-                    Utils.createNotification(this, notificationManager, entry);
+                        (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+                for(String packageName : packages){
+                    Utils.createNotification(this, notificationManager, packageName);
                 }
             }
         }
+        
         loadExtensions();
     }
     
@@ -43,9 +45,9 @@ public class MainApplication extends Application {
     		
     		try{	
     		if(note1.length() > 0){
-    				Notification.Builder ext_builder =
-    			        new Notification.Builder(this)
-    					.setSmallIcon(R.drawable.ic_notes)
+    				NotificationCompat.Builder ext_builder =
+    			        new NotificationCompat.Builder(this)
+    					.setSmallIcon(R.drawable.ic_add)
     					.setContentIntent(ext_intent)
     			        .setContentTitle(note1);
     				
@@ -60,9 +62,9 @@ public class MainApplication extends Application {
     			}
     			
     			if(note2.length() > 0){
-    				Notification.Builder ext_builder =
-    			        new Notification.Builder(this)
-    					.setSmallIcon(R.drawable.ic_notes)
+    				NotificationCompat.Builder ext_builder =
+    			        new NotificationCompat.Builder(this)
+    					.setSmallIcon(R.drawable.ic_add)
     					.setContentIntent(ext_intent)
     			        .setContentTitle(note2);
     				
@@ -78,9 +80,9 @@ public class MainApplication extends Application {
     			}
     			
     			if(note3.length() > 0){
-    				Notification.Builder ext_builder =
-    			        new Notification.Builder(this)
-    					.setSmallIcon(R.drawable.ic_notes)
+    				NotificationCompat.Builder ext_builder =
+    			        new NotificationCompat.Builder(this)
+    					.setSmallIcon(R.drawable.ic_add)
     					.setContentIntent(ext_intent)
     			        .setContentTitle(note3);
     				
@@ -96,9 +98,9 @@ public class MainApplication extends Application {
     			}
     			
     			if(note4.length() > 0){
-    				Notification.Builder ext_builder =
-        			        new Notification.Builder(this)
-        					.setSmallIcon(R.drawable.ic_notes)
+    				NotificationCompat.Builder ext_builder =
+        			        new NotificationCompat.Builder(this)
+        					.setSmallIcon(R.drawable.ic_add)
         					.setContentIntent(ext_intent)
         			        .setContentTitle(note4);
         				

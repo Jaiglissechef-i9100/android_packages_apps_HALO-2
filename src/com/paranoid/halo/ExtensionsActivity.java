@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
+import android.support.v4.app.NotificationCompat;
 
 public class ExtensionsActivity extends PreferenceActivity implements OnSharedPreferenceChangeListener{
 	
@@ -51,7 +52,6 @@ public class ExtensionsActivity extends PreferenceActivity implements OnSharedPr
         getPreferenceScreen().getSharedPreferences().registerOnSharedPreferenceChangeListener(this);
     }
     
-	@SuppressWarnings("deprecation")
 	public void onSharedPreferenceChanged(final SharedPreferences sharedPreferences, final String key){
 		Preference pref_note1 = findPreference("ext_note1");
 	    Preference pref_note2 = findPreference("ext_note2");
@@ -72,9 +72,9 @@ public class ExtensionsActivity extends PreferenceActivity implements OnSharedPr
 	    PendingIntent ext_intent = PendingIntent.getActivity(this, 0, intent, 0);
 	
 	    if (key.equals(KEY_EXT_NOTE_1)) {
-    		Notification.Builder ext_builder =
-			        new Notification.Builder(this)
-					.setSmallIcon(R.drawable.ic_notes)
+    		NotificationCompat.Builder ext_builder =
+			        new NotificationCompat.Builder(this)
+					.setSmallIcon(R.drawable.ic_add)
 					.setContentIntent(ext_intent)
 			        .setContentTitle(note1);
 				
@@ -93,9 +93,9 @@ public class ExtensionsActivity extends PreferenceActivity implements OnSharedPr
 		}
     	
     	if (key.equals(KEY_EXT_NOTE_2)) {
-    		Notification.Builder ext_builder =
-			        new Notification.Builder(this)
-					.setSmallIcon(R.drawable.ic_notes)
+    		NotificationCompat.Builder ext_builder =
+			        new NotificationCompat.Builder(this)
+					.setSmallIcon(R.drawable.ic_add)
 					.setContentIntent(ext_intent)
 			        .setContentTitle(note2);
 				
@@ -114,9 +114,9 @@ public class ExtensionsActivity extends PreferenceActivity implements OnSharedPr
 		}
     	
     	if (key.equals(KEY_EXT_NOTE_3)) {
-    		Notification.Builder ext_builder =
-			        new Notification.Builder(this)
-					.setSmallIcon(R.drawable.ic_notes)
+    		NotificationCompat.Builder ext_builder =
+			        new NotificationCompat.Builder(this)
+					.setSmallIcon(R.drawable.ic_add)
 					.setContentIntent(ext_intent)
 			        .setContentTitle(note3);
 				
@@ -135,9 +135,9 @@ public class ExtensionsActivity extends PreferenceActivity implements OnSharedPr
 		}
     	
     	if (key.equals(KEY_EXT_NOTE_4)) {
-    		Notification.Builder ext_builder =
-			        new Notification.Builder(this)
-					.setSmallIcon(R.drawable.ic_notes)
+    		NotificationCompat.Builder ext_builder =
+			        new NotificationCompat.Builder(this)
+					.setSmallIcon(R.drawable.ic_add)
 					.setContentIntent(ext_intent)
 			        .setContentTitle(note4);
 				

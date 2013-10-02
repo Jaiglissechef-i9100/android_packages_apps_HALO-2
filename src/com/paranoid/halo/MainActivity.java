@@ -1,20 +1,21 @@
 package com.paranoid.halo;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import android.app.ActionBar;
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.Dialog;
-import android.app.NotificationManager;
 import android.content.ActivityNotFoundException;
-import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Shader;
 import android.graphics.drawable.BitmapDrawable;
+import com.paranoid.halo.ApplicationsDialog.AppAdapter;
+import com.paranoid.halo.ApplicationsDialog.AppItem;
+
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -22,18 +23,22 @@ import android.preference.Preference;
 import android.preference.Preference.OnPreferenceClickListener;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceScreen;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.NotificationManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.provider.MediaStore;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.Toast;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ListView;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-public class MainActivity extends PreferenceActivity implements DialogView.DialogCallback {
+public class MainActivity extends PreferenceActivity {
 
     private static final int CUSTOM_USER_ICON = 0;
     
@@ -46,11 +51,9 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
     private boolean mShowing;
     private PreferenceScreen mRoot;
     private List<ResolveInfo> mInstalledApps;
-    private PackageManager mPackageManager;
+    private AppAdapter mAppAdapter;
     private Preference mPreference;
     private File mImageTmp;
-    private Dialog mDialog;
-
     private OnPreferenceClickListener mOnItemClickListener = new OnPreferenceClickListener(){
             @Override
             public boolean onPreferenceClick(Preference arg0) {
@@ -58,9 +61,8 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
                     Toast.makeText(mContext, R.string.stop_to_remove, Toast.LENGTH_SHORT).show();
                 } else {
                     mRoot.removePreference(arg0);
-                    String componentName = arg0.getSummary().toString();
-                    Utils.removeCustomApplicationIcon(componentName, mContext);
-                    Utils.removeApplicationOrActivity(componentName, mContext);
+                    Utils.removeCustomApplicationIcon(arg0.getSummary().toString(), mContext);
+                    savePreferenceItems(false);
                     invalidateOptionsMenu();
                 }
                 return false;
@@ -89,17 +91,18 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
         mShowing = Utils.getStatus(mContext);
         final Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
         mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
-        mPackageManager =  mContext.getPackageManager();
-        mInstalledApps = mPackageManager.queryIntentActivities(mainIntent, 0);
-        Collections.sort(mInstalledApps, new ResolveInfo.DisplayNameComparator(mPackageManager));
+        mInstalledApps = mContext.getPackageManager().queryIntentActivities(mainIntent, 0);
+        ApplicationsDialog appDialog = new ApplicationsDialog();
+        mAppAdapter = appDialog.createAppAdapter(mContext, mInstalledApps);
+        mAppAdapter.update();
         setPreferenceScreen(getPreferenceManager().createPreferenceScreen(this));
         mRoot = getPreferenceScreen();
         loadPreferenceItems();
         helperDialogs();        
 
     }
-    
-    @Override
+
+	@Override
     public boolean onPrepareOptionsMenu(Menu menu) {
         MenuItem item = menu.getItem(1);
         item.setVisible(mRoot.getPreferenceCount() > 0);
@@ -119,7 +122,7 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
             .setIcon(R.drawable.ic_start)
             .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
         menu.add(Menu.NONE, MENU_EXTENSIONS, 0, R.string.extensions)
-            .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
+        	.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
         return true;
     }
 
@@ -127,13 +130,79 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case MENU_ADD:
+                final ListView list = new ListView(mContext);
+                list.setAdapter(mAppAdapter);
+
                 AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
                 builder.setTitle(R.string.choose_app);
-                DialogView view = new DialogView(mContext, mInstalledApps);
-                view.addCallback(this);
-                builder.setView(view);
-                mDialog = builder.create();
-                mDialog.show();
+                builder.setView(list);
+                final Dialog dialog = builder.create();
+
+                list.setOnItemClickListener(new OnItemClickListener() {
+                    @Override
+                    public void onItemClick(AdapterView<?> arg0, View arg1,
+                            int arg2, long arg3) {
+                        final AppItem info = (AppItem) arg0.getItemAtPosition(arg2);
+                        final String packageName = info.packageName;
+                        for(int i = 0; i<mRoot.getPreferenceCount(); i++){
+                            if(mRoot.getPreference(i).getSummary()
+                                    .equals(packageName)){
+                                return;
+                            }
+                        }
+                        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+                        builder.setTitle(R.string.icon_picker_type)
+                                .setItems(R.array.icon_types, new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog2, int which) {
+                                        mPreference = new Preference(mContext);
+                                        mPreference.setOnPreferenceClickListener(mOnItemClickListener);
+                                        mPreference.setTitle(info.title);
+                                        mPreference.setSummary(packageName);
+                                        mPreference.setIcon(info.icon);
+                                        mRoot.addPreference(mPreference);
+                                        invalidateOptionsMenu();
+                                        dialog.cancel();
+                                        switch(which) {
+                                            case 0: // Default
+                                                savePreferenceItems(true);
+                                                break;
+                                            case 1: // Custom user icon
+                                                Intent intent = new Intent(Intent.ACTION_GET_CONTENT
+                                                        , null);
+                                                intent.setType("image/*");
+                                                intent.putExtra("crop", "true");
+                                                intent.putExtra("scale", true);
+                                                intent.putExtra("scaleUpIfNeeded", false);
+                                                intent.putExtra("outputFormat",
+                                                        Bitmap.CompressFormat.PNG.toString());
+                                                intent.putExtra("aspectX", 1);
+                                                intent.putExtra("aspectY", 1);
+                                                intent.putExtra("outputX", 162);
+                                                intent.putExtra("outputY", 162);
+                                                try {
+                                                    mImageTmp.createNewFile();
+                                                    mImageTmp.setWritable(true, false);
+                                                    intent.putExtra(MediaStore.EXTRA_OUTPUT,
+                                                            Uri.fromFile(mImageTmp));
+                                                    intent.putExtra("return-data", false);
+                                                    startActivityForResult(intent, CUSTOM_USER_ICON);
+                                                    dialog.cancel();
+                                                } catch (IOException e) {
+                                                    // We could not write temp file
+                                                    e.printStackTrace();
+                                                } catch (ActivityNotFoundException e) {
+                                                    e.printStackTrace();
+                                                }
+                                                break;
+                                        }
+                                    }
+                                }
+                                );
+                        AlertDialog dialog = builder.create();
+                        dialog.show();
+                    }
+                });
+                dialog.show();
                 break;
             case MENU_ACTION:
                 if(mShowing) {
@@ -151,100 +220,11 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
                 invalidateOptionsMenu();
                 break;
             case MENU_EXTENSIONS:
-                Intent intent = new Intent(this, ExtensionsActivity.class);
+            	Intent intent = new Intent(this, ExtensionsActivity.class);
     	        this.startActivity(intent);
                 break;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    public void onApplicationClicked(final DialogView.ItemInfo info) {
-        String packageName = info.packageName;
-        for(int i = 0; i<mRoot.getPreferenceCount(); i++){
-            if(mRoot.getPreference(i).getSummary()
-                    .equals(packageName)){
-                mDialog.dismiss();
-                return;
-            }
-        }
-        iconPickerDialog(info, packageName);
-    }
-
-    @Override
-    public void onActivityClicked(final DialogView.ItemInfo info){
-        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
-        builder.setTitle(R.string.choose_activity);
-        builder.setItems(info.activities, new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface dialog, int item) {
-                String activity = info.activities[item];
-                for(int i = 0; i<mRoot.getPreferenceCount(); i++){
-                    if(mRoot.getPreference(i).getSummary()
-                            .equals(activity)){
-                        return;
-                    }
-                }
-                iconPickerDialog(info, activity);
-                mDialog.dismiss();
-            }
-        });
-        //Dialog alert = builder.create();
-        builder.show();
-        //alert.show();
-    }
-
-    public void iconPickerDialog(final DialogView.ItemInfo info, final String extraInfo){
-        AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
-        builder.setTitle(R.string.icon_picker_type)
-                .setItems(R.array.icon_types, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog2, int which) {
-                        mPreference = new Preference(mContext);
-                        mPreference.setOnPreferenceClickListener(mOnItemClickListener);
-                        mPreference.setTitle(info.title);
-                        mPreference.setSummary(extraInfo);
-                        mPreference.setIcon(info.icon);
-                        mPreference.setKey(info.packageName);
-                        mRoot.addPreference(mPreference);
-                        invalidateOptionsMenu();
-                        mDialog.cancel();
-                        switch(which) {
-                            case 0: // Default
-                                savePreferenceItems(true);
-                                break;
-                            case 1: // Custom user icon
-                                Intent intent = new Intent(Intent.ACTION_GET_CONTENT,
-                                        null);
-                                intent.setType("image/*");
-                                intent.putExtra("crop", "true");
-                                intent.putExtra("scale", true);
-                                intent.putExtra("scaleUpIfNeeded", false);
-                                intent.putExtra("outputFormat",
-                                        Bitmap.CompressFormat.PNG.toString());
-                                intent.putExtra("aspectX", 1);
-                                intent.putExtra("aspectY", 1);
-                                intent.putExtra("outputX", 162);
-                                intent.putExtra("outputY", 162);
-                                try {
-                                    mImageTmp.createNewFile();
-                                    mImageTmp.setWritable(true, false);
-                                    intent.putExtra(MediaStore.EXTRA_OUTPUT,
-                                            Uri.fromFile(mImageTmp));
-                                    intent.putExtra("return-data", false);
-                                    startActivityForResult(intent, CUSTOM_USER_ICON);
-                                    mDialog.cancel();
-                                } catch (IOException e) {
-                                    // We could not write temp file
-                                    e.printStackTrace();
-                                } catch (ActivityNotFoundException e) {
-                                    e.printStackTrace();
-                                }
-                                break;
-                        }
-                    }
-                }
-                );
-        Dialog iconDialog = builder.create();
-        iconDialog.show();
     }
 
     @Override
@@ -260,10 +240,10 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
                         mImageTmp.renameTo(image);
                     }
                     image.setReadOnly();
-                    String componentName = mPreference.getSummary().toString();
-                    Utils.setCustomApplicationIcon(componentName, path, mContext);
+                    String packageName = mPreference.getSummary().toString();
+                    Utils.setCustomApplicationIcon(packageName, path, mContext);
                     Drawable d = new BitmapDrawable(getResources(), Utils.getCustomApplicationIcon(
-                            componentName, mContext));
+                            packageName, mContext));
                     mPreference.setIcon(d);
                     savePreferenceItems(true);
                 } else {
@@ -274,60 +254,28 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
                 break;
         }
     }
-
+    
     public void savePreferenceItems(boolean create){
-        for(int i = 0; i<mRoot.getPreferenceCount(); i++) {
-            final String activityName = mRoot.getPreference(i)
+        ArrayList<String> items = new ArrayList<String>();
+        for(int i = 0; i<mRoot.getPreferenceCount(); i++){
+            String packageName = mRoot.getPreference(i)
                     .getSummary().toString();
-            final String packageName = mRoot.getPreference(i).getKey();
-            final boolean isPackage = Utils.packageExists(mContext, activityName);
-            if(isPackage) {
-                Utils.savePackageName(activityName, mContext);
-            } else {
-                Utils.saveActivity(packageName, activityName, mContext);
-            }
-            Map.Entry<String,?> entry = new Map.Entry<String, Object>() {
-                @Override
-                public String getKey() {
-                    return isPackage ? packageName : activityName;
-                }
-
-                @Override
-                public Object getValue() {
-                    return isPackage ? Utils.MAIN : packageName;
-                }
-
-                @Override
-                public Object setValue(Object o) {
-                    return null;
-                }
-            };
-
-            if(create && mShowing) Utils.createNotification(mContext, mNotificationManager, entry);
+            items.add(packageName);
+            if(create && mShowing) Utils.createNotification(mContext, mNotificationManager, packageName);
         }
+        Utils.saveArray(items.toArray(new String[items.size()]), mContext);
     }
-
+    
     public void loadPreferenceItems(){
-        Map<String, ?> packages = Utils.loadPackageNames(mContext);
+        String[] packages = Utils.loadArray(mContext);
         if(packages == null) return;
-        for(Map.Entry<String,?> entry : packages.entrySet()){
-            String key = entry.getKey();
-            String value = entry.getValue().toString();
-            boolean isPackage = value.equals(Utils.MAIN);
-            String packageName = isPackage ? key : value;
-            Preference pref = new Preference(mContext);
-            pref.setIcon(Utils.getApplicationIconDrawable(key, mContext));
-            pref.setTitle(Utils.getApplicationName(packageName, mContext));
-            pref.setOnPreferenceClickListener(mOnItemClickListener);
-            pref.setKey(packageName);
-            if (isPackage) {
-                if(Utils.packageExists(mContext, packageName)) {
-                    pref.setSummary(packageName);
-                }
-            } else {
-                pref.setSummary(key);
-            }
-            mRoot.addPreference(pref);
+        for(String packageName : packages){
+            Preference app = new Preference(mContext);
+            app.setTitle(Utils.getApplicationName(packageName, mContext));
+            app.setSummary(packageName);
+            app.setIcon(Utils.getApplicationIconDrawable(packageName, mContext));
+            app.setOnPreferenceClickListener(mOnItemClickListener);
+            mRoot.addPreference(app);
         }
     }
     
@@ -348,36 +296,6 @@ public class MainActivity extends PreferenceActivity implements DialogView.Dialo
         		.putBoolean("firstrun", false)
         		.commit();        	
         }
-        else{
-        	//Try to check if the device has PA installed.
-    		
-    		String hasPa = Utils.getProp("ro.pa");
-    		
-    		if(hasPa.equals("true")){
-    			// You're clever dude! No advice must be shown!
-            }
-    		else{
-    			AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-
-    			builder.setMessage(R.string.nopa_content)
-    			       .setTitle(R.string.nopa_title)
-    			       .setPositiveButton(R.string.nopa_download, new DialogInterface.OnClickListener() {
-    			           public void onClick(DialogInterface dialog, int id) {
-    			        	   String url = "http://goo.im/devs/paranoidandroid/roms";
-    			        	   Intent i = new Intent(Intent.ACTION_VIEW);
-    			        	   i.setData(Uri.parse(url));
-    			        	   startActivity(i);
-    			           }
-    			       })   
-    			       .setNegativeButton(R.string.nopa_ok, new DialogInterface.OnClickListener() {
-    			           public void onClick(DialogInterface dialog, int id) {
-    			        	   dialog.dismiss();
-    			           }
-    			       });
-
-    			AlertDialog nopa_dialog = builder.create();
-    			nopa_dialog.show();
-    		}
-        }
     }
+
 }
